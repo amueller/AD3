@@ -17,11 +17,6 @@
 // along with AD3 2.0.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <math.h>
-#ifdef _WIN32
-#include <gettimeofday.h>
-#else
-#include <sys/time.h>
-#endif
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -34,6 +29,12 @@
 #include "FactorHeadAutomaton.h"
 #include "FactorGrandparentHeadAutomaton.h"
 #include "FactorSequenceCompressor.h"
+#include "FactorSequenceBudget.h"
+#include "FactorCompressionBudget.h"
+#include "FactorGeneralTree.h"
+#include "FactorGeneralTreeCounts.h"
+#include "FactorBinaryTree.h"
+#include "FactorBinaryTreeCounts.h"
 
 using namespace std;
 using namespace AD3;
@@ -426,9 +427,19 @@ int LoadGraph(ifstream &file_graph,
       factor->SetAdditionalLogPotentials(additional_scores);
       num_factor_log_potentials += additional_scores.size();
       cout << "Read dense factor." << endl;
-    } else if (fields[0] == "SEQUENCE") {
+    } else if (fields[0] == "SEQUENCE" ||
+               fields[0] == "SEQUENCE_BUDGET") {
+      bool has_budget = false;
+      if (fields[0] == "SEQUENCE_BUDGET") has_budget = true;
       // Read the sequence length.
       int length = atoi(fields[offset+num_links].c_str());
+      // If budget, read the budget.
+      int budget = -1;
+      if (has_budget) {
+        ++offset; // TODO: Make sure this is fine.
+        budget = atoi(fields[offset+num_links].c_str());
+      }
+
       // Read the number of states for each position in the sequence.
       vector<int> num_states(length);
       int total_states = 0;
@@ -460,12 +471,80 @@ int LoadGraph(ifstream &file_graph,
       }
 
       // Create the factor and declare it.
-      factor = new FactorSequence;
-      factor_graph->DeclareFactor(factor, binary_variables, true);
-      static_cast<FactorSequence*>(factor)->Initialize(num_states);
+      if (has_budget) {
+        factor = new FactorSequenceBudget;
+        factor_graph->DeclareFactor(factor, binary_variables, true);
+        static_cast<FactorSequenceBudget*>(factor)->
+          Initialize(num_states, budget);
+        factor->SetAdditionalLogPotentials(additional_scores);
+        num_factor_log_potentials += additional_scores.size();
+        cout << "Read sequence budget factor." << endl;
+      } else {
+        factor = new FactorSequence;
+        factor_graph->DeclareFactor(factor, binary_variables, true);
+        static_cast<FactorSequence*>(factor)->Initialize(num_states);
+        factor->SetAdditionalLogPotentials(additional_scores);
+        num_factor_log_potentials += additional_scores.size();
+        cout << "Read sequence factor." << endl;
+      }        
+    } else if (fields[0] == "GENERAL_TREE" ||
+               fields[0] == "GENERAL_TREE_COUNTS") {
+      // Read the number of nodes in the tree.
+      int length = atoi(fields[offset+num_links].c_str());
+
+      // Read the number of states for each node in the tree.
+      vector<int> num_states(length);
+      int total_states = 0;
+      for (int k = 0; k < length; ++k) {
+        num_states[k] = atoi(fields[offset+num_links+1+k].c_str());
+        total_states += num_states[k];
+      }
+
+      // Read the parent node for each node in the tree.
+      vector<int> parents(length);
+      for (int k = 0; k < length; ++k) {
+        parents[k] = atoi(fields[offset+num_links+1+length+k].c_str());
+      }
+
+      // Read the additional log-potentials.
+      vector<double> additional_scores;
+      int index = 0;
+      for (int i = 1; i < length; ++i) {
+        int p = parents[i];
+        int num_previous_states = num_states[p];
+        int num_current_states = num_states[i];
+        for (int k = 0; k < num_previous_states; ++k) {
+          for (int j = 0; j < num_current_states; ++j) {
+            double log_potential = atof(fields[offset+num_links+1+length+length+index].c_str());
+            additional_scores.push_back(log_potential);
+            ++index;
+          }
+        }
+      }
+      if (fields.size() != offset+num_links+1+length+length+index) {
+        cout << fields.size() << " "
+             << offset+num_links+1+length+length+index << endl;
+        assert(false);
+      }
+
+      // Create the factor and declare it.
+      if (fields[0] == "GENERAL_TREE") {
+        factor = new FactorGeneralTree;
+        factor_graph->DeclareFactor(factor, binary_variables, true);
+        static_cast<FactorGeneralTree*>(factor)->Initialize(parents, num_states);
+      } else {
+        factor = new FactorGeneralTreeCounts;
+        factor_graph->DeclareFactor(factor, binary_variables, true);
+        static_cast<FactorGeneralTreeCounts*>(factor)->Initialize(parents, num_states);
+      }
+
       factor->SetAdditionalLogPotentials(additional_scores);
       num_factor_log_potentials += additional_scores.size();
-      cout << "Read sequence factor." << endl;
+      if (fields[0] == "GENERAL_TREE") {
+        cout << "Read general tree factor." << endl;
+      } else {
+        cout << "Read general tree counts factor." << endl;
+      }
     } else if (fields[0] == "ARBORESCENCE") {
       // Read the sentence length.
       int sentence_length = atoi(fields[offset+num_links].c_str());

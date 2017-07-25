@@ -37,6 +37,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "ad3/FactorGraph.h"
+#include "ad3/Utils.h"
 #include "FactorHeadAutomaton.h"
 #include "FactorTree.h"
 #include <cstdlib>
@@ -112,6 +113,7 @@ int main(int argc, char **argv) {
 
   // Create factor graph and define factors (subproblems).
   FactorGraph factor_graph;
+  factor_graph.SetVerbosity(2);
   vector<Factor*> factors;
   // Create variables (one per arc).
   vector<BinaryVariable*> variables(arcs.size());

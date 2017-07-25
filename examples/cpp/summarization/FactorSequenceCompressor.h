@@ -22,7 +22,7 @@
 #include "ad3/GenericFactor.h"
 
 // Need to include this because of the class AD3::Sibling.
-#include "examples/parsing/FactorHeadAutomaton.h"
+#include "examples/cpp/parsing/FactorHeadAutomaton.h"
 
 namespace AD3 {
 
@@ -186,6 +186,10 @@ class FactorSequenceCompressor : public GenericFactor {
         ++j;
       }
     }
+    // Unless any of the configurations is all-zeros, there is one extra
+    // common value (the sentence variable).
+    if (values1->size() > 0 && values2->size() > 0) ++count;
+
     return count;
   }
 
@@ -226,6 +230,26 @@ class FactorSequenceCompressor : public GenericFactor {
       int h = siblings[k]->head();
       int m = siblings[k]->modifier();
       int s = siblings[k]->sibling();
+      if (s > h) {
+        m -= h;
+        s -= h;
+      } else {
+        m = h - m;
+        s = h - s;
+      }
+      index_siblings_[m][s] = k;
+    }
+  }
+
+  void Initialize(int length, const vector<int> &left_positions,
+                  const vector<int> &right_positions) {
+    length_ = length;
+    index_siblings_.assign(length, vector<int>(length+1, -1));
+    assert(left_positions.size() == right_positions.size());
+    for (int k = 0; k < left_positions.size(); ++k) {
+      int h = 0;
+      int m = left_positions[k];
+      int s = right_positions[k];
       if (s > h) {
         m -= h;
         s -= h;

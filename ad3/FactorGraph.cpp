@@ -18,11 +18,6 @@
 
 #include <iostream>
 #include <math.h>
-#ifdef _WIN32
-#include <gettimeofday.h>
-#else
-#include <sys/time.h>
-#endif
 #include "FactorGraph.h"
 #include "Utils.h"
 
@@ -841,7 +836,7 @@ int FactorGraph::RunBranchAndBound(double cumulative_value,
 }
 
 int FactorGraph::RunAD3(double lower_bound,
-                        vector<double> *posteriors, 
+                        vector<double> *posteriors,
                         vector<double> *additional_posteriors,
                         double *value,
                         double *upper_bound) {

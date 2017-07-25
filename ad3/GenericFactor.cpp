@@ -133,7 +133,7 @@ void GenericFactor::InvertAfterRemoval(const vector<Configuration> &active_set,
 
   ++removed_index; // Index in A has an offset of 1.
   double invs = inverse_A[removed_index * size_A + removed_index];
-  assert(!NEARLY_ZERO_TOL(invs, 1e-12));
+  assert(!NEARLY_ZERO_TOL(invs, 1e-12)); // TODO: Make this tolerance depend on the scale of the data.
   double s = 1.0 / invs;
   vector<double> d(size_A - 1, 0.0);
   int k = 0;
@@ -197,7 +197,7 @@ void GenericFactor::EigenDecompose(vector<double> *similarities,
   }
 #endif
 
-  int size = sqrt(similarities->size());
+  int size = static_cast<int>(sqrt(static_cast<double>(similarities->size())));
 #ifdef EIGEN
   Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es;
   Eigen::MatrixXd sim(size, size);
@@ -549,6 +549,7 @@ void GenericFactor::SolveQP(const vector<double> &variable_log_potentials,
       double alpha = 1.0;
       for (int i = 0; i < active_set_.size(); ++i) {
         assert(distribution_[i] >= -1e-12);
+        //if (z[i] >= distribution_[i] - 1e-12) continue;
         if (z[i] >= distribution_[i]) continue;
         if (z[i] < 0) exist_blocking = true;
         double tmp = distribution_[i] / (distribution_[i] - z[i]);
@@ -573,6 +574,13 @@ void GenericFactor::SolveQP(const vector<double> &variable_log_potentials,
           for (int i = 0; i < active_set_.size(); ++i) {
             z[i] = (1 - alpha) * distribution_[i] + alpha * z[i];
             distribution_[i] = z[i];
+            if (distribution_[i] < 0.0) {
+              if (verbosity_ > 2) {
+                cout << "Truncating distribution variable: "
+                     << distribution_[i] << endl;
+              }
+              distribution_[i] = 0.0;
+            }
           }
         }
 
